@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt
 
 # Database connection class
 class DatabaseConnection:
-    def __init__(self, host="localhost", user="root", password="N0r5eV1k1ng", database="electric_vehicles"):
+    def __init__(self, host="localhost", user="root", password="--MYSQL-USER-PASSWORD--", database="ev_consumer"):
         self.host = host
         self.user = user
         self.password = password
@@ -37,7 +37,7 @@ class DatabaseConnection:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Electric Vehicle Consumer Report")
+        self.setWindowTitle("2023 Electric Vehicle Consumer Report")
         self.setMinimumSize(600, 400)
 
         # Menu items
@@ -73,8 +73,8 @@ class MainWindow(QMainWindow):
 
         # QTableWidget attributes
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(("Id", "Make", "Model", "Range(miles)", "Cost(us)"))
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(("Id", "Make", "Model", "Range(miles)", "Price(us)"))
 
         # To hide default vertical numbers not associated with SQL database
         self.table.verticalHeader().setVisible(False)
@@ -110,7 +110,8 @@ class MainWindow(QMainWindow):
     def load_data(self):
         # Connect SQL database
         connection, cursor = DatabaseConnection().connect()
-        results = connection.execute("SELECT * FROM electric_vehicles")
+        cursor.execute("SELECT * FROM electric_vehicles")
+        results = cursor.fetchall()
 
         # Initialize table number to 0
         self.table.setRowCount(0)
@@ -158,7 +159,7 @@ class InsertDialog(QDialog):
         super().__init__()
 
         # Set Window Attributes
-        self.setWindowTitle("Insert Electric Vehicle Data")
+        self.setWindowTitle("Add Electric Vehicle Data")
         self.setFixedWidth(300)
         self.setFixedHeight(300)
 
@@ -203,8 +204,9 @@ class InsertDialog(QDialog):
         connection, cursor = DatabaseConnection().connect()
 
         # Use the cursor to destructure and INSERT reference variables into related db columns
-        cursor.execute("INSERT INTO electric_vehicles (make, model, range_miles, cost_us) VALUES (?, ?, ?, ?)",
-                       (make, model, range_miles, price))
+        cursor.execute(
+            "INSERT INTO electric_vehicles (make, model, range_miles, cost_us_dollars) VALUES (%s, %s, %s, %s)",
+            (make, model, range_miles, price))
 
         # Commit changes, Close connection to database and cursor
         DatabaseConnection().close_connection(connection, cursor)
@@ -226,9 +228,9 @@ class SearchDialog(QDialog):
         search_layout = QVBoxLayout()
 
         # Search Vehicle Name widget
-        self.search_vehicle_name = QLineEdit()
-        self.search_vehicle_name.setPlaceholderText("Vehicle Name")
-        search_layout.addWidget(self.search_vehicle_name)
+        self.search_vehicle_make = QLineEdit()
+        self.search_vehicle_make.setPlaceholderText("Vehicle Make")
+        search_layout.addWidget(self.search_vehicle_make)
 
         # Search button
         search_btn = QPushButton("Search")
@@ -240,18 +242,19 @@ class SearchDialog(QDialog):
     # Search Vehicle method
     def search_vehicle(self):
         # Reference to field values stored in variables
-        name = self.search_vehicle_name.text()
+        make = self.search_vehicle_make.text()
 
         # Connect to database and create cursor
         connection, cursor = DatabaseConnection().connect()
 
         # Select all fields that contained query of vehicle name in database
-        result = cursor.execute("SELECT * FROM electric_vehicles WHERE name = ?", (name, ))
+        cursor.execute("SELECT * FROM electric_vehicles WHERE make = %s", (make, ))
+        result = cursor.fetchall()
         rows = list(result)
         print(rows)
 
         # Select all fields in Main window table and find match of vehicle name
-        items = ev_consumer_report.table.findItems(name, Qt.MatchFlag.MatchFixedString)
+        items = ev_consumer_report.table.findItems(make, Qt.MatchFlag.MatchFixedString)
 
         # Highlight all names that match query and print item row to console
         for item in items:
@@ -294,7 +297,7 @@ class EditDialog(QDialog):
         vehicle_range = ev_consumer_report.table.item(index, 3).text()
 
         # Get Vehicle Price
-        vehicle_price = ev_consumer_report.table.item(index, 3).text()
+        vehicle_price = ev_consumer_report.table.item(index, 4).text()
 
         # Add Vehicle Make widget
         self.make = QLineEdit(vehicle_make)
@@ -314,7 +317,7 @@ class EditDialog(QDialog):
         # Add Price widget
         self.price = QLineEdit(vehicle_price)
         self.price.setPlaceholderText("Vehicle Price")
-        layout.addWidget(self.range_miles)
+        layout.addWidget(self.price)
 
         # Submit button
         submit_btn = QPushButton("Update")
@@ -328,7 +331,8 @@ class EditDialog(QDialog):
         connection, cursor = DatabaseConnection().connect()
 
         # Destructure table rows and UPDATE with new values from references in edit fields
-        cursor.execute("UPDATE electric_vehicles SET make = ?, model = ?, range_miles = ?, cost_us = ? WHERE id = ?",
+        cursor.execute("UPDATE electric_vehicles SET make = %s, model = %s,"
+                       " range_miles = %s, cost_us_dollars = %s WHERE id = %s",
                        (self.make.text(),
                         self.model.text(),
                         self.range_miles.text(),
@@ -375,7 +379,7 @@ class DeleteDialog(QDialog):
         vehicle_id = ev_consumer_report.table.item(index, 0).text()
 
         # Execute SQL DELETE query using vehicle ID
-        cursor.execute("DELETE FROM electric_vehicles WHERE id = ?", (vehicle_id, ))
+        cursor.execute("DELETE FROM electric_vehicles WHERE id = %s", (vehicle_id, ))
 
         # Commit changes, Close connection to database and cursor
         DatabaseConnection().close_connection(connection, cursor)
